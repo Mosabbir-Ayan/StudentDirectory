@@ -1,98 +1,183 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import { router } from "expo-router";
+import { useMemo, useState } from "react";
+import {
+  Alert,
+  FlatList,
+  Platform,
+  Pressable,
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
+import SearchBar from "../../components/search-bar";
+import StudentDetail from "../../components/student-detail";
+import StudentItem from "../../components/student-item";
+import { useStudents } from "../../context/students-context";
+import { type Student } from "../../data/students";
 
-import { HelloWave } from '@/components/hello-wave';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Link } from 'expo-router';
+export default function StudentDirectoryScreen() {
+  const { students, dispatch } = useStudents();
+  const [query, setQuery] = useState("");
+  const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
 
-export default function HomeScreen() {
+  const filteredStudents = useMemo(() => {
+    const search = query.trim().toLowerCase();
+
+    if (!search) {
+      return students;
+    }
+
+    return students.filter(
+      (student) =>
+        student.name.toLowerCase().includes(search) ||
+        student.studentId.toLowerCase().includes(search) ||
+        student.department.toLowerCase().includes(search)
+    );
+  }, [students, query]);
+
+  const resetStudents = () => {
+    const performReset = () => {
+      dispatch({ type: "RESET" });
+      setSelectedStudent(null);
+      setQuery("");
+    };
+
+    if (Platform.OS === "web") {
+      if (globalThis.confirm("Remove all added students and restore the original list?")) {
+        performReset();
+      }
+      return;
+    }
+
+    Alert.alert(
+      "Reset Directory",
+      "Remove all added students and restore the original list?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Reset",
+          style: "destructive",
+          onPress: performReset,
+        },
+      ]
+    );
+  };
+
+  const handleSelectStudent = (student: Student) => {
+    setSelectedStudent(student);
+  };
+
+  const visibleSelectedStudent = students.find(
+    (student) => student.id === selectedStudent?.id
+  );
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <Link href="/modal">
-          <Link.Trigger>
-            <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-          </Link.Trigger>
-          <Link.Preview />
-          <Link.Menu>
-            <Link.MenuAction title="Action" icon="cube" onPress={() => alert('Action pressed')} />
-            <Link.MenuAction
-              title="Share"
-              icon="square.and.arrow.up"
-              onPress={() => alert('Share pressed')}
-            />
-            <Link.Menu title="More" icon="ellipsis">
-              <Link.MenuAction
-                title="Delete"
-                icon="trash"
-                destructive
-                onPress={() => alert('Delete pressed')}
-              />
-            </Link.Menu>
-          </Link.Menu>
-        </Link>
+    <SafeAreaView style={styles.screen}>
+      <View style={styles.titleBar}>
+        <View style={styles.headingContainer}>
+          <Text style={styles.heading}>Student Directory</Text>
+          <Text style={styles.count}>{students.length} students</Text>
+        </View>
 
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+        <View style={styles.actions}>
+          <Pressable
+            style={styles.addButton}
+            onPress={() => router.push("/(tabs)/add-student")}
+          >
+            <Text style={styles.addButtonText}>+ Add</Text>
+          </Pressable>
+
+          <Pressable style={styles.resetButton} onPress={resetStudents}>
+            <Text style={styles.resetButtonText}>Reset</Text>
+          </Pressable>
+        </View>
+      </View>
+
+      <SearchBar value={query} onChangeText={setQuery} />
+
+      <FlatList
+        data={filteredStudents}
+        keyExtractor={(student) => student.id}
+        renderItem={({ item }) => (
+          <StudentItem
+            student={item}
+            onPress={() => handleSelectStudent(item)}
+          />
+        )}
+        ListEmptyComponent={
+          <Text style={styles.emptyText}>No students found.</Text>
+        }
+        contentContainerStyle={styles.listContent}
+        keyboardShouldPersistTaps="handled"
+      />
+
+      {visibleSelectedStudent ? (
+        <StudentDetail student={visibleSelectedStudent} />
+      ) : null}
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  screen: {
+    flex: 1,
+    backgroundColor: "#F8FAFC",
+  },
+  titleBar: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  headingContainer: {
+    flex: 1,
+  },
+  heading: {
+    fontSize: 23,
+    fontWeight: "800",
+    color: "#0D1F4E",
+  },
+  count: {
+    marginTop: 4,
+    fontSize: 13,
+    color: "#64748B",
+  },
+  actions: {
+    flexDirection: "row",
     gap: 8,
   },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
+  addButton: {
+    backgroundColor: "#0D9488",
+    paddingHorizontal: 13,
+    paddingVertical: 10,
+    borderRadius: 9,
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
+  addButtonText: {
+    color: "#FFFFFF",
+    fontWeight: "700",
+  },
+  resetButton: {
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+    paddingHorizontal: 13,
+    paddingVertical: 10,
+    borderRadius: 9,
+  },
+  resetButtonText: {
+    color: "#475569",
+    fontWeight: "600",
+  },
+  listContent: {
+    paddingBottom: 16,
+    flexGrow: 1,
+  },
+  emptyText: {
+    textAlign: "center",
+    color: "#64748B",
+    padding: 24,
   },
 });
